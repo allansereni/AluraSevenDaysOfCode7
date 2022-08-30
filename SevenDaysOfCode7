@@ -1,0 +1,229 @@
+import java.io.PrintWriter;
+import java.util.Collections;
+import java.util.List;
+
+public class SevenDaysOfCode7 {
+
+	public static void main(String[] args) throws Exception {
+		
+		String apikey = "<apikey>";
+		String json = new ImdbApiClient(apikey).getbody();
+
+		List<Filmes> filmes = new ImdbMovieJsonParse(json).organiza();
+		
+		Collections.sort(filmes);
+		
+		PrintWriter writer = new PrintWriter("Top250.html");
+		new HtmlGenerator(writer).generate(filmes);
+		writer.close();
+		
+	}
+
+}
+
+//Classe Filmes
+
+public class Filmes implements Comparable<Filmes>{
+
+	private String titulo;
+	private String url;
+	private String ano;
+	private String nota;
+
+	
+	public Filmes(String titulo, String url, String ano, String nota) {
+		this.titulo = titulo;
+		this.url = url;
+		this.ano = ano;
+		this.nota = nota;
+	}
+
+	public String getTitulo() {
+		return titulo;
+	}
+	
+	public String getUrl() {
+		return url;
+	}
+	
+	public String getAno() {
+		return ano;
+	}
+	
+	public String getNota() {
+		return nota;
+	}
+	
+	@Override
+	public String toString() {
+		return "Titulo= " + titulo + ", nota= " + nota + ", ano= " + ano + "cartaz= " + url + "]";
+	}
+	
+	@Override
+	public int compareTo(Filmes filmes) {
+		
+		return this.ano.compareTo(filmes.getAno());
+	}
+	
+}
+
+//Classe ImdbApiClient
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+public class ImdbApiClient {
+	
+	private String apikey;
+	
+	public ImdbApiClient(String apikey) {
+		this.apikey = apikey;
+	}
+
+	public String getbody() {
+		try {
+			String url = "https://imdb-api.com/en/API/Top250Movies/" + apikey;
+
+			HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+
+			BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+
+			String json = br.readLine();
+			
+			return json;
+		} catch (IOException e) {
+			throw new IllegalStateException(e);
+		}
+				
+	}
+	
+}
+
+//Classe ImsbMovieJsonParse
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+public class ImdbMovieJsonParse {
+
+	private String json;
+	
+	public ImdbMovieJsonParse(String json) {
+		this.json = json;
+	}
+	
+	public List<Filmes> organiza() {
+		
+		String[] listaDeFilmes = separandoFilmes(json);
+
+		List<String> titulos = separaTitulo(listaDeFilmes);
+		List<String> urlImages = separaImagem(listaDeFilmes);
+		List<String> ano = separaAno(listaDeFilmes);
+		List<String> notas = separaNotas(listaDeFilmes);
+
+		List<Filmes> filmes = new ArrayList<>(titulos.size());
+
+		for (int i = 0; i < titulos.size(); i++) {
+			filmes.add(new Filmes(titulos.get(i), urlImages.get(i), ano.get(i), notas.get(i)));
+		}
+		
+		return filmes;
+
+	}
+	
+	private static String[] separandoFilmes(String json) {
+		Pattern pattern = Pattern.compile(".*\\[(.*)\\].*");
+		Matcher matcher = pattern.matcher(json);
+
+		if (!matcher.matches()) {
+			throw new IllegalArgumentException();
+		}
+
+		String[] listaDeFilmes = matcher.group(1).split("\\},\\{");
+		return listaDeFilmes;
+	}
+
+	private static List<String> separaTitulo(String[] listaDeFilmes) {
+
+		return separadorDeInformacoes(listaDeFilmes, 2);
+	}
+
+	private static List<String> separaImagem(String[] listaDeFilmes) {
+		return separadorDeInformacoes(listaDeFilmes, 5);
+	}
+
+	private static List<String> separaAno(String[] listaDeFilmes) {
+		return separadorDeInformacoes(listaDeFilmes, 4);
+	}
+
+	private static List<String> separaNotas(String[] listaDeFilmes) {
+		return separadorDeInformacoes(listaDeFilmes, 7);
+	}
+
+	private static List<String> separadorDeInformacoes(String[] listaDeFilmes, int pos) {
+		return Stream.of(listaDeFilmes)
+				.map(e -> e.split("\",\"")[pos])
+				.map(e -> e.split("\":\"")[1])
+				.collect(Collectors.toList());
+	}
+
+}
+
+//Classe HtmlGenerator
+
+import java.io.PrintWriter;
+import java.util.List;
+
+
+
+public class HtmlGenerator {
+
+	private final PrintWriter writer;
+
+	public HtmlGenerator(PrintWriter writer) {
+		this.writer = writer;
+	}
+
+	public void generate(List<Filmes> filmes) {
+
+		writer.println(
+				"""
+				<html>
+					<head>
+						<meta charset=\"utf-8\">
+						<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, shrink-to-fit=no\">
+						<link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css\" 
+									+ "integrity=\"sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm\" crossorigin=\"anonymous\">
+									
+					</head>
+					<body>
+				""");
+
+					for (Filmes movie : filmes) {
+						String div =
+						"""
+						<div class=\"card text-white bg-dark mb-3\" style=\"max-width: 18rem;\">
+							<h4 class=\"card-header\">%s</h4>
+							<div class=\"card-body\">
+								<img class=\"card-img\" src=\"%s\" alt=\"%s\">
+								<p class=\"card-text mt-2\">Nota: %s - Ano: %s</p>
+							</div>
+						</div>
+						""";
+						writer.println(String.format(div, movie.getTitulo(), movie.getUrl(), movie.getTitulo(), movie.getNota(), movie.getAno()));
+
+					}
+					writer.println(
+							"""
+								</body>
+							</html>
+							""");
+	}
+}
